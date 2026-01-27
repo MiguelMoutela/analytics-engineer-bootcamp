@@ -5,7 +5,7 @@ FROM astrocrpublic.azurecr.io/runtime:3.1-9
 # COPY --chown=astro:0 . .
 
 # install dbt into a virtual environment
-RUN python -m venv dbt_venv && source dbt_venv/bin/activate && \
-    pip install --no-cache-dir -r dbt_project/dbt-requirements.txt  && \
-    cd dbt_project && dbt deps && cd .. && \
-    deactivate
+# RUN python -m venv dbt_venv && source dbt_venv/bin/activate && \
+#     pip install --no-cache-dir -r dbt_project/dbt-requirements.txt  && \
+#     cd dbt_project && dbt deps && cd .. && \
+#     deactivate
