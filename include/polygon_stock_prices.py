@@ -27,6 +27,7 @@ def _setup_aws_creds(aws_access_key_id: str, aws_secret_access_key: str, aws_reg
     os.environ['AWS_DEFAULT_REGION'] = aws_region
     os.environ['AWS_S3_BUCKET_TABULAR'] = s3_bucket
 
+
 def s3_catalog(
     aws_access_key_id: str, 
     aws_secret_access_key: str, 
