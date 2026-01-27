@@ -3,8 +3,8 @@ from airflow.providers.standard.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from airflow.models import Variable
 from airflow.providers.standard.sensors.python import PythonSensor
-from include.eczachly.scripts.polygon_stock_prices import fetch_stock_prices, dq_stock_prices, promote_stock_prices, tidyup_stock_prices
-from include.eczachly.trino_queries import execute_trino_query
+from include.polygon_stock_prices import fetch_stock_prices, dq_stock_prices, promote_stock_prices, tidyup_stock_prices
+from include.trino_queries import execute_trino_query
 
 def run_stock_prices_script(**context):
     """Execute the stock prices fetching function with AWS credentials"""
@@ -13,8 +13,8 @@ def run_stock_prices_script(**context):
         run_date=context['ds'],
         tickers_table="miguelmoutela.stock_tickers",
         staging_table="miguelmoutela.stock_prices_staging",
-        aws_access_key_id=Variable.get("DATAEXPERT_AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=Variable.get("DATAEXPERT_AWS_SECRET_ACCESS_KEY"),
+        aws_access_key_id=Variable.get("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=Variable.get("AWS_SECRET_ACCESS_KEY"),
         polygon_api_key=Variable.get("POLYGON_API_KEY")
     )
 
@@ -46,8 +46,8 @@ def massive_stock_prices_dag():
             "query": """
                 SELECT count(*) > 0 FROM miguelmoutela.stock_tickers WHERE date=DATE('{{ ds }}')
             """,
-            "aws_access_key_id": Variable.get("DATAEXPERT_AWS_ACCESS_KEY_ID"),
-            "aws_secret_access_key": Variable.get("DATAEXPERT_AWS_SECRET_ACCESS_KEY")
+            "aws_access_key_id": Variable.get("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": Variable.get("AWS_SECRET_ACCESS_KEY")
         }
     )
 
@@ -62,8 +62,8 @@ def massive_stock_prices_dag():
         op_kwargs={
             "staging_table": 'miguelmoutela.stock_prices_staging',
             "run_date": "{{ ds }}",
-            "aws_access_key_id": Variable.get("DATAEXPERT_AWS_ACCESS_KEY_ID"),
-            "aws_secret_access_key": Variable.get("DATAEXPERT_AWS_SECRET_ACCESS_KEY"),
+            "aws_access_key_id": Variable.get("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": Variable.get("AWS_SECRET_ACCESS_KEY"),
         }
     )
 
@@ -74,8 +74,8 @@ def massive_stock_prices_dag():
             "staging_table": 'miguelmoutela.stock_prices_staging',
             "production_table": 'miguelmoutela.stock_prices',
             "run_date": "{{ ds }}",
-            "aws_access_key_id": Variable.get("DATAEXPERT_AWS_ACCESS_KEY_ID"),
-            "aws_secret_access_key": Variable.get("DATAEXPERT_AWS_SECRET_ACCESS_KEY"),
+            "aws_access_key_id": Variable.get("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": Variable.get("AWS_SECRET_ACCESS_KEY"),
         }
     )
 
@@ -85,8 +85,8 @@ def massive_stock_prices_dag():
         op_kwargs={
             "staging_table": 'miguelmoutela.stock_prices_staging',
             "run_date": "{{ ds }}",
-            "aws_access_key_id": Variable.get("DATAEXPERT_AWS_ACCESS_KEY_ID"),
-            "aws_secret_access_key": Variable.get("DATAEXPERT_AWS_SECRET_ACCESS_KEY"),
+            "aws_access_key_id": Variable.get("AWS_ACCESS_KEY_ID"),
+            "aws_secret_access_key": Variable.get("AWS_SECRET_ACCESS_KEY"),
         }
     )
 
