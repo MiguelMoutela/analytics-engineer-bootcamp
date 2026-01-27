@@ -1,5 +1,6 @@
 .env
-
+__init__.py
+__pycache__
 .git
 .DS_Store
 *venv
