@@ -1,6 +1,8 @@
-import sys
-from datetime import datetime, timedelta
+from datetime import datetime
+import time
+import os
 import requests
+import boto3
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
@@ -13,77 +15,41 @@ from pyiceberg.types import (
 )
 from pyiceberg.partitioning import PartitionSpec, PartitionField
 from pyiceberg.transforms import DayTransform
-import os
-import boto3
-from dotenv import load_dotenv
-import time
 
 
-def _setup_aws_creds(aws_access_key_id: str, aws_secret_access_key: str, aws_region: str, s3_bucket: str):
-    """Sets AWS credentials"""
-    os.environ['AWS_ACCESS_KEY_ID'] = aws_access_key_id
-    os.environ['AWS_SECRET_ACCESS_KEY'] = aws_secret_access_key
-    os.environ['AWS_REGION'] = aws_region
-    os.environ['AWS_DEFAULT_REGION'] = aws_region
-    os.environ['AWS_S3_BUCKET_TABULAR'] = s3_bucket
+def s3_catalog():
+    """Returns s3 bucket catalog"""
 
+    os.environ['AWS_ACCESS_KEY_ID'] = os.environ['DATAEXPERT_AWS_ACCESS_KEY_ID']
+    os.environ['AWS_SECRET_ACCESS_KEY'] =  os.environ['DATAEXPERT_AWS_SECRET_ACCESS_KEY']
+    os.environ['AWS_REGION'] = os.environ['DATAEXPERT_AWS_REGION']
+    os.environ['AWS_DEFAULT_REGION'] = os.environ['DATAEXPERT_AWS_DEFAULT_REGION']
+    os.environ['AWS_S3_BUCKET_TABULAR'] = os.environ['DATAEXPERT_S3_BUCKET_TABULAR']
 
-def s3_catalog(
-    aws_access_key_id: str, 
-    aws_secret_access_key: str, 
-    aws_region: str = 'us-west-2', 
-    s3_bucket: str = 'zachwilsonsorganization-522'
-):
-    """Returns s3bucket catalog"""
-    _setup_aws_creds(aws_access_key_id, aws_secret_access_key, aws_region, s3_bucket)
-    aws_region = os.environ.get('AWS_REGION')
-    s3_bucket = os.environ.get('AWS_S3_BUCKET_TABULAR')
-    boto3.setup_default_session(region_name=aws_region)
+    boto3.setup_default_session(region_name=os.environ['DATAEXPERT_AWS_REGION'])
     # Configure PyIceberg to use AWS Glue catalog
     catalog = load_catalog(
         name="glue_catalog",
         **{
             "type": "glue",
-            "region": aws_region,
-            "warehouse": f"s3://{s3_bucket}/iceberg-warehouse/",
+            "region": os.environ['DATAEXPERT_AWS_REGION'],
+            "warehouse": f"s3://{os.environ['AWS_S3_BUCKET_TABULAR']}/iceberg-warehouse/",
         }
     )
-    
     return catalog
 
 
-def fetch_stock_prices(
-    run_date: str,
-    tickers_table: str = "zachwilson.polygon_tickers",
-    staging_table: str = "zachwilson.polygon_stock_prices",
-    aws_access_key_id: str = None,
-    aws_secret_access_key: str = None,
-    polygon_api_key: str = None,
-):
-    """
-    Fetch stock prices from Polygon API for tickers in the tickers table.
-    
-    Args:
-        run_date: Date string in YYYY-MM-DD format
-        tickers_table: Source Iceberg table with ticker list
-        staging_table: Target Iceberg table for stock prices
-        aws_access_key_id: AWS access key ID
-        aws_secret_access_key: AWS secret access key
-        aws_region: AWS region
-        s3_bucket: S3 bucket for Iceberg warehouse
-    """
-    catalog = s3_catalog(aws_access_key_id, aws_secret_access_key)
-    # Parse run date
+def fetch_stock_prices(run_date: str, tickers_table: str, staging_table: str, polygon_api_key: str):
+    """Fetch stock prices from Polygon API for tickers in the tickers table."""
+
+    catalog = s3_catalog()
     date = datetime.strptime(run_date, "%Y-%m-%d").date()
     
     # Load tickers from the tickers table for the given date
     print(f"Loading tickers from {tickers_table} for date {date}")
     all_tickers = catalog.load_table(tickers_table)
-    
     # Query tickers for the specific date
-    tickers = all_tickers.scan(
-        row_filter=f"date = '{date}'"
-    ).to_pandas()
+    tickers = all_tickers.scan(row_filter=f"date = '{date}'").to_pandas()
     
     if tickers.empty:
         raise ValueError(f"No tickers found for date {date}")
@@ -164,35 +130,24 @@ def fetch_stock_prices(
     # Convert to PyArrow table
     pa_table = pa.Table.from_pylist(stock_prices, schema=pa_schema)
     
-    # Create or load table
-    namespace, table_name = staging_table.split('.')
     try:
         table = catalog.load_table(staging_table)
         print(f"Table {staging_table} already exists")
     except Exception:
-        # Create table if it doesn't exist
-        partition_spec = PartitionSpec(
-            PartitionField(source_id=10, field_id=1000, transform=DayTransform(), name="load_date_day")
-        )
-        
-        table = catalog.create_table(
-            identifier=staging_table,
-            schema=schema,
-            partition_spec=partition_spec
-        )
+        spec = PartitionSpec(PartitionField(source_id=10, field_id=1000, transform=DayTransform(), name="load_date_day"))
+        table = catalog.create_table(identifier=staging_table, schema=schema, partition_spec=spec)
         print(f"Created table {staging_table}")
     
-    # Overwrite partition for the run_date
     table.overwrite(pa_table)
     
     print(f"Successfully wrote {len(stock_prices)} stock price records to {staging_table} for date {date}")
     return f"Successfully wrote {len(stock_prices)} stock price records to {staging_table} for date {date}"
 
 
-def dq_stock_prices(staging_table: str, run_date: str, aws_access_key_id: str, aws_secret_access_key: str):
+def dq_stock_prices(staging_table: str, run_date: str):
     """Data Quality Check for Polygon API data"""
     print(f"Running DQ on {staging_table} for {run_date}")
-    catalog = s3_catalog(aws_access_key_id, aws_secret_access_key)
+    catalog = s3_catalog()
     staging = catalog.load_table(staging_table)
     run_dt = datetime.strptime(run_date, "%Y-%m-%d").isoformat()
     partition = staging.scan(row_filter=f"load_date = '{run_dt}'").to_pandas()
@@ -217,36 +172,24 @@ def dq_stock_prices(staging_table: str, run_date: str, aws_access_key_id: str, a
         raise ValueError(f"DQ step failed for the following rules: {' and '.join(failed_rules)}")
 
 
-def promote_stock_prices(staging_table: str, production_table: str, run_date: str, aws_access_key_id: str, aws_secret_access_key: str):
+def promote_stock_prices(staging_table: str, production_table: str, run_date: str):
     """Promote staged Polygon API data to Production"""
+    
     print(f"Promoting {staging_table} -> {production_table} for {run_date}")
-    catalog = s3_catalog(aws_access_key_id, aws_secret_access_key)
+    catalog = s3_catalog()
     source = catalog.load_table(staging_table)
     target = catalog.load_table(production_table)
 
     run_dt = datetime.strptime(run_date, "%Y-%m-%d").isoformat()
     partition = source.scan(row_filter=f"load_date = '{run_dt}'").to_arrow()
-    
-    upsert_result = target.upsert(partition, join_cols=["ticker","load_date"])
+    target.overwrite(partition, overwrite_filter=f"load_date >= '{run_dt}'")
 
 
-def tidyup_stock_prices(staging_table: str, run_date: str, aws_access_key_id: str, aws_secret_access_key: str):
+def tidyup_stock_prices(staging_table: str, run_date: str):
     """TidyUp Polygon API data Staging"""
+
     print(f"Cleaning up staging table {staging_table} for {run_date}")
-    catalog = s3_catalog(aws_access_key_id, aws_secret_access_key)
+    catalog = s3_catalog()
     staging = catalog.load_table(staging_table)
     run_dt = datetime.strptime(run_date, "%Y-%m-%d").isoformat()
     staging.delete(delete_filter=f"load_date = '{run_dt}'")
-    
-
-# Script execution mode (when run directly)
-if __name__ == "__main__":
-    # Load environment variables from .env file
-    load_dotenv()
-    
-    # Get arguments from command line
-    run_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
-    tickers_table = sys.argv[2] if len(sys.argv) > 2 else "zachwilson.polygon_tickers"
-    staging_table = sys.argv[3] if len(sys.argv) > 3 else "zachwilson.polygon_stock_prices"
-    
-    fetch_stock_prices(run_date, tickers_table, staging_table)

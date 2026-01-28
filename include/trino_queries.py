@@ -1,23 +1,28 @@
+import os
 import trino
-# The way we're doing the DQ check here is
-def run_trino_query_dq_check(query):
+
+
+def run_trino_query_dq_check(query) -> bool:
+    """Check for non-null response"""
+    
     results = execute_trino_query(query)
+    
     if len(results) == 0:
         raise ValueError('The query returned no results!')
-    for result in results:
-        for column in result:
-            if type(column) is bool:
-                assert column is True
+    
+    return all(bool(column) for result in results for column in result)
 
 
 def execute_trino_query(query):
+    """Returns response from Trino"""
+
     conn = trino.dbapi.connect(
-        host='dataengineer-eczachly.trino.galaxy.starburst.io',
+        host=os.environ['DATAEXPERT_TRINO_HOST'],
         port=443,
-        user='support@eczachly.com/student',
+        user=os.environ['DATAEXPERT_TRINO_USER'],
         http_scheme='https',
-        catalog='academy',
-        auth=trino.auth.BasicAuthentication('support@eczachly.com/student', 'trin0-supp0rt!'),
+        catalog=os.environ['DATAEXPERT_TRINO_CATALOG'],
+        auth=trino.auth.BasicAuthentication(os.environ['DATAEXPERT_TRINO_USER'], os.environ['DATAEXPERT_TRINO_PW']),
     )
     print(query)
     cursor = conn.cursor()
