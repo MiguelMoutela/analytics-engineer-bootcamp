@@ -3,7 +3,7 @@ DataExpert.io Analytics Engineer Bootcamp Work
 
 
 tidy up + rebuild
-bash```
+```bash
 deactivate || true && \
 astro dev stop || true && \
 rm -rf venv && \
