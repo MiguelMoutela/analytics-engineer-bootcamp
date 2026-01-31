@@ -1,0 +1,15 @@
+miguelmoutela.proc_nba_player_cdc_flow(1996);
+miguelmoutela.proc_nba_player_cdc_flow(1997);
+miguelmoutela.proc_nba_player_cdc_flow(1998);
+miguelmoutela.proc_nba_player_cdc_flow(1999);
+miguelmoutela.proc_nba_player_cdc_flow(2000);
+miguelmoutela.proc_nba_player_cdc_flow(2001);
+miguelmoutela.proc_nba_player_cdc_flow(2002);
+miguelmoutela.proc_nba_player_cdc_flow(2003);
+miguelmoutela.proc_nba_player_cdc_flow(2004);
+miguelmoutela.proc_nba_player_cdc_flow(2005);
+miguelmoutela.proc_nba_player_cdc_flow(2006);
+miguelmoutela.proc_nba_player_cdc_flow(2007);
+miguelmoutela.proc_nba_player_cdc_flow(2008);
+miguelmoutela.proc_nba_player_cdc_flow(2009);
+miguelmoutela.proc_nba_player_cdc_flow(2010);
