@@ -14,6 +14,20 @@ project:
     - DATAEXPERT_TRINO_PW
     - DATAEXPERT_DAG_OWNER
     - STUDENT_SCHEMA
+    - PG_HOST
+    - PG_DATABASE
+    - PG_PORT
+    - PG_USER
+    - PG_PASSWORD
+    - SF_ACCOUNT=
+    - SF_USER
+    - SF_ROLE
+    - SF_WAREHOUSE
+    - SF_DATABASE
+    - SF_SCHEMA
+    - SF_PRIVATE_KEY_PATH
+    - SF_PRIVATE_KEY_PASSPHRASE
+
 skip_parse: false
 verbosity: debug
 webserver:
