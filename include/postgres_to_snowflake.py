@@ -1,7 +1,7 @@
 import pandas as pd
 from psycopg2 import sql
-import dataexpert_postgres as postgres
-import dataexpert_snowflake as snowflake
+from include import dataexpert_postgres as postgres
+from include import dataexpert_snowflake as snowflake
 
 
 def migrate(source: str, target: str):
@@ -30,6 +30,6 @@ def migrate(source: str, target: str):
                 snow_df = snow_cx.create_dataframe(df)
                 snow_df.write.mode("append").save_as_table(target)
                 has_rows = pg_cur.rownumber != pg_cur.rowcount
-    
+
     return f"Processed {source} {target}"
 

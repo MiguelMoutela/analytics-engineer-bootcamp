@@ -2,7 +2,8 @@ import os
 from datetime import datetime, timedelta
 from airflow.sdk import dag
 from airflow.providers.standard.operators.python import PythonOperator
-from include import postgres_to_snowflake
+from airflow.providers.standard.sensors.python import PythonSensor
+from include import postgres_to_snowflake, dataexpert_snowflake as snowflake
 
 @dag(
     description="DAG to audit timezone changes from DataExpert.io students",
@@ -24,9 +25,9 @@ def timezone_changes_audit_dag():
         task_id="fetch_users",
         python_callable=postgres_to_snowflake.migrate,
         op_kwargs={
-            "source": "STUDENT_API.USERS",
+            "source": "student_api.users",
             "target": ".".join([
-                os.environ["DATAEXPERT_STUDENT"],
+                os.environ["SF_DATABASE"],
                 os.environ["SF_SCHEMA"],
                 "USER_TIMEZONE_RAW"
             ])
@@ -37,15 +38,31 @@ def timezone_changes_audit_dag():
         task_id="fetch_timezone_changes",
         python_callable=postgres_to_snowflake.migrate,
         op_kwargs={
-            "source": "STUDENT_API.TIMEZONE_AUDIT_TRACKING",
+            "source": "student_api.timezone_audit_tracking",
             "target": ".".join([
-                os.environ["DATAEXPERT_STUDENT"],
+                os.environ["SF_DATABASE"],
                 os.environ["SF_SCHEMA"],
                 "USER_TIMEZONE_AUDIT_RAW"
             ])
         }
     )
 
-    fetch_users >> fetch_timezone_changes
+    check_source_table = PythonSensor(
+        task_id="check_source_table",
+        python_callable=snowflake.has_table,
+        poke_interval=60, 
+        timeout=7200,      
+        mode='reschedule',
+        op_kwargs={
+            "table": "USER_TIMEZONE_AUDIT_RAW"
+        }
+    )
+
+    build_scd2 = PythonOperator(
+        task_id="build_scd2",
+        python_callable=snowflake.create_view_user_timezone_scd2
+    )
+
+    fetch_users >> fetch_timezone_changes >> check_source_table >> build_scd2
 
 timezone_changes_audit_dag()

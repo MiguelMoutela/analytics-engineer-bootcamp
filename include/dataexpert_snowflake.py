@@ -33,3 +33,55 @@ def connect():
         yield session
     finally:
         session.close()
+
+
+def execute_sql(sql: str):
+    """Creates session and executes sql"""
+
+    with connect() as cx:
+        res = cx.sql(sql).collect()
+        return res
+    return
+
+
+def has_table(table: str):
+    """Check table exists"""
+    return bool(execute_sql(f"""
+        SELECT 1
+        FROM {os.environ["SF_DATABASE"]}.INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = '{os.environ["SF_SCHEMA"]}'
+        AND TABLE_NAME = '{table}'
+        LIMIT 1
+    """)) > 0
+
+
+def create_view_user_timezone_scd2():
+    """Creates scd2 view from audit changes"""
+
+    execute_sql("""
+        create or replace view user_timezone_scd2 as
+        with user_timezone_changes as (
+            select 
+                "user_id", 
+                "old_timezone" as "timezone", 
+                "update_time" as "valid_from",
+                lead("update_time") over (
+                    partition by "user_id"
+                    order by "update_time" asc
+                ) as "valid_to"
+            from miguelmoutela.user_timezone_audit_raw
+        )
+        select *,
+            "valid_to" is null as is_current,
+            row_number() over (
+                partition by "user_id"
+                order by 
+                "valid_to" desc nulls first
+            ) as "rn"
+        from user_timezone_changes
+    """)
+
+
+
+
+        
