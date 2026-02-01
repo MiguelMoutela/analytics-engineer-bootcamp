@@ -9,5 +9,6 @@ astronomer-cosmos
 pyarrow==20.0.0
 pyiceberg[glue,s3fs]==0.8.1
 
-psycopg2
+psycopg2-binary
 snowflake-snowpark-python
+pandas
