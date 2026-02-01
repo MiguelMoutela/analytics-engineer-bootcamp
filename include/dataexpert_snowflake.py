@@ -46,7 +46,7 @@ def execute_sql(sql: str):
 
 def has_table(table: str):
     """Check table exists"""
-    return bool(execute_sql(f"""
+    return len(execute_sql(f"""
         SELECT 1
         FROM {os.environ["SF_DATABASE"]}.INFORMATION_SCHEMA.TABLES
         WHERE TABLE_SCHEMA = '{os.environ["SF_SCHEMA"]}'
@@ -70,6 +70,18 @@ def create_view_user_timezone_scd2():
                     order by "update_time" asc
                 ) as "valid_to"
             from miguelmoutela.user_timezone_audit_raw
+            union all
+            select 
+                "user_id", 
+                "timezone", 
+                "update_time" as "valid_from",
+                current_timestamp() AS "valid_from"
+            from user_timezone_snapshot_raw s
+            where not exists (
+                select 1
+                from user_timezone_audit_raw a
+                where a."user_id" = s."user_id"
+            )
         )
         select *,
             "valid_to" is null as is_current,

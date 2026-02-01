@@ -20,16 +20,17 @@ def migrate(source: str, target: str):
                 )
             )
             
-            snow_cx.sql(f"drop table if exists {target}").collect()
+            if pg_cur.rowcount > 0:
+                snow_cx.sql(f"drop table if exists {target}").collect()
 
-            while has_rows:
-                rows = pg_cur.fetchmany(CHUNK_SIZE)
-                df = pd.DataFrame(
-                    data=rows, columns=[col.name for col in pg_cur.description]
-                )
-                snow_df = snow_cx.create_dataframe(df)
-                snow_df.write.mode("append").save_as_table(target)
-                has_rows = pg_cur.rownumber != pg_cur.rowcount
+                while has_rows:
+                    rows = pg_cur.fetchmany(CHUNK_SIZE)
+                    df = pd.DataFrame(
+                        data=rows, columns=[col.name for col in pg_cur.description]
+                    )
+                    snow_df = snow_cx.create_dataframe(df)
+                    snow_df.write.mode("append").save_as_table(target)
+                    has_rows = pg_cur.rownumber != pg_cur.rowcount
 
     return f"Processed {source} {target}"
 

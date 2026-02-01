@@ -11,7 +11,7 @@ def connect():
         dbname=os.environ["PG_DATABASE"],
         user=os.environ["PG_USER"],
         password=os.environ["PG_PASSWORD"],
-        port=5432,
+        port=os.environ["PG_PORT"],
         sslmode="require"
     )
     try:
