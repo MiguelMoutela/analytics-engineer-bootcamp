@@ -4,7 +4,7 @@ import os
 
 @contextmanager
 def connect():
-    """Returns connection iter"""
+    """Yields connection"""
     
     conn = psycopg2.connect(
         host=os.environ["PG_HOST"],

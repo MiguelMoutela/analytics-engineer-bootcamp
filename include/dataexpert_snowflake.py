@@ -6,7 +6,7 @@ from snowflake.snowpark import Session
 
 @contextmanager
 def connect():
-    print("snow cx")
+    """Yields session"""
 
     key_path = os.path.expanduser(os.environ.get("SF_PRIVATE_KEY_PATH"))
     passphrase = os.environ.get("SF_PRIVATE_KEY_PASSPHRASE")
@@ -18,17 +18,6 @@ def connect():
             f.read(),
             password=password_bytes
         )
-
-    # private_key_bytes = p_key.private_bytes(
-    #     encoding=serialization.Encoding.DER,
-    #     format=serialization.PrivateFormat.PKCS8,
-    #     encryption_algorithm=serialization.NoEncryption(),
-    # )
-
-    # private_key = serialization.load_pem_private_key(
-    #     base64.b64decode(os.environ["SF_PRIVATE_KEY_BASE64"]),
-    #     password=os.environ["SF_PRIVATE_KEY_PASSPHRASE"].encode(),
-    # )
 
     session = Session.builder.configs({
         "account": os.environ["SF_ACCOUNT"],
