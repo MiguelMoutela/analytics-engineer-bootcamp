@@ -31,3 +31,4 @@ package-lock.yml
 
 ## project specific files
 include/test.txt
+.keys

@@ -23,7 +23,6 @@ def migrate(source: str, target: str):
     default_args={
         "owner": os.environ['DATAEXPERT_DAG_OWNER'],
         "start_date": datetime(2026, 1, 14),
-        "end_date": datetime(2026, 1, 14),
         "retries": 1,
         "execution_timeout": timedelta(hours=2),
     },
@@ -35,7 +34,15 @@ def migrate(source: str, target: str):
 def timezone_changes_audit_dag():
     """Processes timezone changes from DataExpert.io"""
 
-    fetch_users_step = PythonOperator(
+    def hello():
+        print("HELLO AIRFLOW")
+
+    hello_task = PythonOperator(
+        task_id="hello",
+        python_callable=hello,
+    )
+
+    fetch_users_task = PythonOperator(
         task_id="fetch_users",
         python_callable=migrate,
         op_kwargs={
@@ -44,7 +51,7 @@ def timezone_changes_audit_dag():
         }
     )
 
-    fetch_timezone_changes_step = PythonOperator(
+    fetch_timezone_changes_task = PythonOperator(
         task_id="fetch_timezone_changes",
         python_callable=migrate,
         op_kwargs={
@@ -53,6 +60,6 @@ def timezone_changes_audit_dag():
         }
     )
 
-    fetch_users_step >> fetch_timezone_changes_step
+    hello_task >> fetch_users_task >> fetch_timezone_changes_task
 
 timezone_changes_audit_dag()
