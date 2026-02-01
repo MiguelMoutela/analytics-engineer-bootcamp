@@ -29,7 +29,7 @@ def timezone_changes_audit_dag():
             "target": ".".join([
                 os.environ["SF_DATABASE"],
                 os.environ["SF_SCHEMA"],
-                "USER_TIMEZONE_RAW"
+                "USER_TIMEZONE_SNAPSHOT_RAW"
             ])
         }
     )
