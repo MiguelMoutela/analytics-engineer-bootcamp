@@ -25,11 +25,11 @@ def timezone_changes_audit_dag():
         task_id="fetch_users",
         python_callable=postgres_to_snowflake.migrate,
         op_kwargs={
-            "source": "student_api.users",
+            "source": os.environ["PG_SNAPSHOT_TABLE"],
             "target": ".".join([
                 os.environ["SF_DATABASE"],
                 os.environ["SF_SCHEMA"],
-                "USER_TIMEZONE_SNAPSHOT_RAW"
+                os.environ["SF_SNAPSHOT_TABLE"]
             ])
         }
     )
@@ -38,23 +38,38 @@ def timezone_changes_audit_dag():
         task_id="fetch_timezone_changes",
         python_callable=postgres_to_snowflake.migrate,
         op_kwargs={
-            "source": "student_api.timezone_audit_tracking",
+            "source": os.environ["PG_AUDIT_TABLE"],
             "target": ".".join([
                 os.environ["SF_DATABASE"],
                 os.environ["SF_SCHEMA"],
-                "USER_TIMEZONE_AUDIT_RAW"
+                os.environ["SF_AUDIT_TABLE"]
             ])
         }
     )
 
-    check_source_table = PythonSensor(
-        task_id="check_source_table",
+    check_source_snapshot_table = PythonSensor(
+        task_id="check_source_snapshot_table",
         python_callable=snowflake.has_table,
         poke_interval=60, 
         timeout=7200,      
         mode='reschedule',
         op_kwargs={
-            "table": "USER_TIMEZONE_AUDIT_RAW"
+            "database": os.environ["SF_DATABASE"],
+            "schema": os.environ["SF_SCHEMA"],
+            "table": os.environ["SF_SNAPSHOT_TABLE"]
+        }
+    )
+
+    check_source_audit_table = PythonSensor(
+        task_id="check_source_audit_table",
+        python_callable=snowflake.has_table,
+        poke_interval=60, 
+        timeout=7200,      
+        mode='reschedule',
+        op_kwargs={
+            "database": os.environ["SF_DATABASE"],
+            "schema": os.environ["SF_SCHEMA"],
+            "table": os.environ["SF_AUDIT_TABLE"]
         }
     )
 
@@ -63,6 +78,6 @@ def timezone_changes_audit_dag():
         python_callable=snowflake.create_view_user_timezone_scd2
     )
 
-    fetch_users >> fetch_timezone_changes >> check_source_table >> build_scd2
+    fetch_users >> fetch_timezone_changes >> check_source_snapshot_table >> check_source_audit_table >> build_scd2
 
 timezone_changes_audit_dag()

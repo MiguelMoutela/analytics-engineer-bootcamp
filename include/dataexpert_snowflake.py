@@ -58,39 +58,49 @@ def has_table(table: str):
 def create_view_user_timezone_scd2():
     """Creates scd2 view from audit changes"""
 
-    execute_sql("""
+    execute_sql(f"""
         create or replace view user_timezone_scd2 as
         with user_timezone_changes as (
             select 
                 "user_id", 
-                "old_timezone" as "timezone", 
+                "new_timezone" as "timezone", 
                 "update_time" as "valid_from",
                 lead("update_time") over (
                     partition by "user_id"
                     order by "update_time" asc
                 ) as "valid_to"
-            from miguelmoutela.user_timezone_audit_raw
+            from {os.environ["SF_DATABASE"]}.{os.environ["SF_SCHEMA"]}.{os.environ["SF_AUDIT_TABLE"]}
             union all
             select 
                 "user_id", 
                 "timezone", 
-                "update_time" as "valid_from",
                 current_timestamp() AS "valid_from"
-            from user_timezone_snapshot_raw s
-            where not exists (
-                select 1
-                from user_timezone_audit_raw a
-                where a."user_id" = s."user_id"
-            )
+            from {os.environ["SF_DATABASE"]}.{os.environ["SF_SCHEMA"]}.{os.environ["SF_SNAPSHOT_TABLE"]}
+        )
+        , ordered_changes as (
+            select 
+                "user_id", 
+                "timezone",
+                lag("timezone") over (
+                    partition by "user_id"
+                    order by "valid_from"
+                ) as "prev_timezone",
+                "valid_from",
+                lead("valid_from") over (
+                    partition by "user_id"
+                    order by "valid_from"
+                ) as "valid_to",
+            from user_timezone_changes
+        )
+        , valid_op_changes AS (
+            select *
+            from ordered_changes
+            where "timezone" <> "prev_timezone"
+            or "prev_timezone" is null
         )
         select *,
-            "valid_to" is null as is_current,
-            row_number() over (
-                partition by "user_id"
-                order by 
-                "valid_to" desc nulls first
-            ) as "rn"
-        from user_timezone_changes
+            "valid_to" is null as "is_current"
+        from valid_op_changes
     """)
 
 
