@@ -44,12 +44,12 @@ def execute_sql(sql: str):
     return
 
 
-def has_table(table: str):
+def has_table(database: str, schema: str, table: str):
     """Check table exists"""
     return len(execute_sql(f"""
         SELECT 1
-        FROM {os.environ["SF_DATABASE"]}.INFORMATION_SCHEMA.TABLES
-        WHERE TABLE_SCHEMA = '{os.environ["SF_SCHEMA"]}'
+        FROM {database}.INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = '{schema}'
         AND TABLE_NAME = '{table}'
         LIMIT 1
     """)) > 0

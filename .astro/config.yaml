@@ -21,7 +21,7 @@ project:
     - PG_PASSWORD
     - PG_SNAPSHOT_TABLE
     - PG_AUDIT_TABLE
-    - SF_ACCOUNT=
+    - SF_ACCOUNT
     - SF_USER
     - SF_ROLE
     - SF_WAREHOUSE
