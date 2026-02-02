@@ -64,11 +64,7 @@ def create_view_user_timezone_scd2():
             select 
                 "user_id", 
                 "new_timezone" as "timezone", 
-                "update_time" as "valid_from",
-                lead("update_time") over (
-                    partition by "user_id"
-                    order by "update_time" asc
-                ) as "valid_to"
+                "update_time" as "valid_from"
             from {os.environ["SF_DATABASE"]}.{os.environ["SF_SCHEMA"]}.{os.environ["SF_AUDIT_TABLE"]}
             union all
             select 
