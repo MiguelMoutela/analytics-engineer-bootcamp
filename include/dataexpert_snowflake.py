@@ -85,7 +85,7 @@ def create_view_user_timezone_scd2():
                 lead("valid_from") over (
                     partition by "user_id"
                     order by "valid_from"
-                ) as "valid_to",
+                ) as "valid_to"
             from user_timezone_changes
         )
         , valid_op_changes AS (

@@ -27,9 +27,12 @@ def migrate(source: str, target: str):
                 df = pd.DataFrame(
                     data=rows, columns=[col.name for col in pg_cur.description]
                 )
-                snow_df = snow_cx.create_dataframe(df)
-                snow_df.write.mode("append").save_as_table(target)
-                has_rows = pg_cur.rownumber != pg_cur.rowcount
+                
+                if not df.empty:
+                    snow_df = snow_cx.create_dataframe(df)
+                    snow_df.write.mode("append").save_as_table(target)
+                    
+                has_rows = (pg_cur.rownumber != pg_cur.rowcount) and pg_cur.rowcount != -1
 
     return f"Processed {source} {target}"
 
