@@ -9,8 +9,9 @@ def migrate(source: str, target: str):
 
     CHUNK_SIZE = 5000
     has_rows = True
-    with postgres.connect() as pg_cx, snowflake.connect() as snow_cx:
 
+    with postgres.connect() as pg_cx, snowflake.connect() as snow_cx:
+        
         with pg_cx.cursor() as pg_cur:
             pg_cur.execute(
                 sql.SQL(
@@ -24,11 +25,13 @@ def migrate(source: str, target: str):
 
             while has_rows:
                 rows = pg_cur.fetchmany(CHUNK_SIZE)
+
                 if not rows:
                     break
 
                 df = pd.DataFrame(
-                    data=rows, columns=[col.name for col in pg_cur.description]
+                    data=rows, 
+                    columns=[col.name for col in pg_cur.description]
                 )
                 
                 if not df.empty:
