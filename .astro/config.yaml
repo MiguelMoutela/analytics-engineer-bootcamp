@@ -19,7 +19,9 @@ project:
     - PG_PORT
     - PG_USER
     - PG_PASSWORD
-    - SF_ACCOUNT=
+    - PG_SNAPSHOT_TABLE
+    - PG_AUDIT_TABLE
+    - SF_ACCOUNT
     - SF_USER
     - SF_ROLE
     - SF_WAREHOUSE
@@ -27,7 +29,8 @@ project:
     - SF_SCHEMA
     - SF_PRIVATE_KEY_PATH
     - SF_PRIVATE_KEY_PASSPHRASE
-    - SF_PRIVATE_KEY_BASE64
+    - SF_SNAPSHOT_TABLE
+    - SF_AUDIT_TABLE
     - SEC_API_KEY
     
 skip_parse: false

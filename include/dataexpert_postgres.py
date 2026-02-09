@@ -4,14 +4,14 @@ import os
 
 @contextmanager
 def connect():
-    """Returns connection iter"""
+    """Yields connection"""
     
     conn = psycopg2.connect(
         host=os.environ["PG_HOST"],
         dbname=os.environ["PG_DATABASE"],
         user=os.environ["PG_USER"],
         password=os.environ["PG_PASSWORD"],
-        port=5432,
+        port=os.environ["PG_PORT"],
         sslmode="require"
     )
     try:
