@@ -178,7 +178,7 @@ def load_earnings_transcripts_to_snowflake():
                 
             # Upload file to Snowflake stage using PUT command
             print(f"Uploading to Snowflake stage...")
-            put_sql = f'PUT file://{file_path} @{stage_name}/{file_name} AUTO_COMPRESS=FALSE'
+            put_sql = f'PUT file://{file_path} @{stage_name} AUTO_COMPRESS=FALSE'
             session.sql(put_sql).collect()
                 
             # Record metadata
