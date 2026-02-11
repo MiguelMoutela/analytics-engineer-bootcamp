@@ -66,6 +66,21 @@ def has_table(database: str, schema: str, table: str):
     """)) > 0
 
 
+def create_stage(database: str, schema: str, stage_name: str):
+    """Create stage"""
+    return execute_sql(f"""
+        CREATE STAGE IF NOT EXISTS {database}.{schema}.{stage_name}
+        ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
+        COMMENT = 'Stage for World Inequality reports'
+    """)
+
+
+def stage_upload(stage_name: str, file_name: str, file_path: str):
+    return execute_sql(f"""
+        PUT file://{file_path} @{stage_name}/{file_name}/ AUTO_COMPRESS=FALSE
+    """)
+
+
 def create_view_user_timezone_scd2():
     """Creates scd2 view from audit changes"""
     
