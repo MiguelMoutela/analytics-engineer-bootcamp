@@ -1,9 +1,8 @@
 list @dataexpert_student.miguelmoutela.world_inequality_report_images_stage;
 INSERT INTO dataexpert_student.miguelmoutela.world_inequality_images (
     image_id,
+    image_number,
     file_id,
-    filename,
-    page_number,
     image_base64,
     image_url,
     embedding,
@@ -11,14 +10,16 @@ INSERT INTO dataexpert_student.miguelmoutela.world_inequality_images (
     created_at
 )
 select
-    image_id,
+    UUID_STRING() AS image_id,
+    image_id as image_number,
     file_id,
-    filename,
-    page_number,
     image_base64,
     image_url,
     embedding,
-    null,
+    object_construct(
+        'page_number', page_number,
+        'document', filename
+    ) as metadata,
     current_timestamp()
 from (
     with wir_images as (
@@ -39,15 +40,14 @@ from (
             ) as embedding
         from wir_images
     )
-    --, image_details (
     select 
         img.image_url,
         img.image_id,
         img.file_id,
-        raw.filename,
-        raw.page_number,
         raw.image_base64,
-        img.embedding
+        img.embedding,
+        raw.page_number,
+        raw.filename
     from image_embeddings img
     join miguelmoutela.world_inequality_reports_layout_raw raw on (
         raw.file_checksum = img.file_id

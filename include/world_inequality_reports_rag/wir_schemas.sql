@@ -14,9 +14,8 @@ CREATE OR REPLACE TABLE miguelmoutela.world_inequality_text_chunks (
 
 CREATE OR REPLACE TABLE miguelmoutela.world_inequality_images (
     image_id VARCHAR,
+    image_number VARCHAR,
     file_id VARCHAR,
-    filename VARCHAR,
-    page_number NUMBER,
     image_base64 VARCHAR,
     image_url VARCHAR,
     embedding VECTOR(FLOAT, 1024),   -- image embedding model size
