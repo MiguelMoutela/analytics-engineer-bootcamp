@@ -83,3 +83,62 @@ select
 from miguelmoutela.extracted_transcripts
 ;
 
+
+
+
+--other
+
+select * from miguelmoutela.document_chunks_with_embeddings;
+select * from miguelmoutela.document_processing_log;
+select * from miguelmoutela.embeddings_to_search;
+
+WITH parsed_doc AS (
+                SELECT 
+                    AI_PARSE_DOCUMENT(
+                        TO_FILE('@MIGUELMOUTELA.sec_filings_stage', 'AAPL/AAPL_2018-11-05_000032019318000145.pdf'),
+                        OBJECT_CONSTRUCT('mode','layout', 'page_split', true, 'extract_images', true)
+                    ) as parsed_content
+            ),
+            -- Extract pages with their content
+            page_content AS (
+                SELECT 
+                    page.value:page_number::INTEGER as page_number,
+                    page.value:content::VARCHAR as page_text
+                FROM parsed_doc,
+                    LATERAL FLATTEN(input => parsed_content:pages) page
+                WHERE page.value:content IS NOT NULL
+            ),
+            -- Split each page's content into paragraphs by double newlines
+            page_paragraphs AS (
+                SELECT 
+                    page_number,
+                    SPLIT(page_text, '\n\n') as paragraph_array
+                FROM page_content
+            ),
+            -- Flatten and number paragraphs within each page
+            numbered_paragraphs AS (
+                SELECT 
+                    page_number,
+                    para.index + 1 as paragraph_number,
+                    TRIM(para.value::VARCHAR) as text_content
+                FROM page_paragraphs,
+                    LATERAL FLATTEN(input => paragraph_array) para
+                WHERE LENGTH(TRIM(para.value::VARCHAR)) > 50  -- Filter out short lines
+            )
+            -- Create chunks with embeddings
+            SELECT 
+                UUID_STRING() as chunk_id,
+                'SEC_FILING' as source_type,
+                'AAPL' as ticker,
+                '0000320193-18-000145' as accession_number,
+                '@MIGUELMOUTELA.sec_filings_stage/AAPL/AAPL_2018-11-05_000032019318000145.pdf' as file_path,
+                page_number,
+                paragraph_number,
+                'PARAGRAPH' as chunk_type,
+                OBJECT_CONSTRUCT('text', text_content) as content,
+                text_content,
+                NULL as embedding,
+                NULL as parent_chunk_id,
+                OBJECT_CONSTRUCT('paragraph_length', LENGTH(text_content)) as metadata,
+                CURRENT_TIMESTAMP() as processed_at
+            FROM numbered_paragraphs
