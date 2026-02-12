@@ -4,12 +4,13 @@ CREATE OR REPLACE TABLE miguelmoutela.world_inequality_text_chunks (
     filename VARCHAR,
     page_number NUMBER,
     paragraph_number NUMBER,
-    chunk_type VARCHAR,                -- 'PARAGRAPH'
+    chunk_type VARCHAR,               
     text_content VARCHAR,
     embedding VECTOR(FLOAT, 768),     -- text embedding model size
     metadata VARIANT,
     created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
+
 
 CREATE OR REPLACE TABLE miguelmoutela.world_inequality_images (
     image_id VARCHAR,
@@ -17,7 +18,8 @@ CREATE OR REPLACE TABLE miguelmoutela.world_inequality_images (
     filename VARCHAR,
     page_number NUMBER,
     image_base64 VARCHAR,
-    embedding VECTOR(FLOAT, 768),   -- image embedding model size (check model dim)
+    image_url VARCHAR,
+    embedding VECTOR(FLOAT, 1024),   -- image embedding model size
     metadata VARIANT,
     created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
