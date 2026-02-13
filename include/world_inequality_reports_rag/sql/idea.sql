@@ -54,3 +54,68 @@ DROP STAGE MIGUELMOUTELA.WORLD_INEQUALITY_REPORTS_STAGE;
 
 
 
+
+
+MERGE_IMAGES_TRANSFORM = fr"""--sql
+still need to compile the proc to base64 to jpeg
+
+INSERT INTO dataexpert_student.miguelmoutela.world_inequality_images (
+    image_id,
+    image_number,
+    file_id,
+    image_base64,
+    image_url,
+    embedding,
+    metadata,
+    created_at
+)
+select
+    UUID_STRING() AS image_id,
+    image_id as image_number,
+    file_id,
+    image_base64,
+    image_url,
+    embedding,
+    object_construct(
+        'page_number', page_number,
+        'document', filename
+    ) as metadata,
+    current_timestamp()
+from (
+    with wir_images as (
+        select 
+            "name" as image_url,
+            split_part("name", '/', -1) as image_filename
+        from table(result_scan(last_query_id()))
+    )   
+    , image_embeddings as (
+        select
+            image_url,
+            image_filename,
+            split_part(image_filename, '_', -1) as image_id,
+            split_part(image_filename, '_', -2) as file_id,
+            AI_EMBED(
+                'voyage-multimodal-3',
+                to_file('@miguelmoutela.world_inequality_report_images_stage', image_filename)
+            ) as embedding
+        from wir_images
+    )
+    select 
+        img.image_url,
+        img.image_id,
+        img.file_id,
+        raw.image_base64,
+        img.embedding,
+        raw.page_number,
+        raw.filename
+    from image_embeddings img
+    join miguelmoutela.world_inequality_reports_layout_raw raw on (
+        raw.file_checksum = img.file_id
+        and raw.image_id = img.image_id
+    ) 
+);
+"""
+
+304): 01c260dc-0107-c49c-0000-33eb03b66b8e: 100090 (42P18): Duplicate row detected during DML action
+Row Values: ["536feb281fc101e9fe41dee116db875f3e2829b7b7ddc32e5db143d0a6bb682e", "world-inequality-report-2022.pdf", 58, 1, "PARAGRAPH", "Figure 2.3 Global income inequality: Gini index, 1820-2020
+![img-46.jpeg](img-46.jpeg)", 

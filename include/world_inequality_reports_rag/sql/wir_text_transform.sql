@@ -4,7 +4,7 @@
 
 -- raw extract
 list @dataexpert_student.miguelmoutela.world_inequality_reports_stage;
---create or replace table miguelmoutela.world_inequality_reports_layout_raw as
+create or replace table miguelmoutela.world_inequality_reports_layout_raw as
 select *
 from (
     with report as (
@@ -57,7 +57,6 @@ with page_paragraphs as (
             partition by file_checksum, filename, page_number, paragraph_number order by paragraph_number
         ) as images_in_paragraph
     from page_paragraphs
-    --where position(image_id IN paragraph) > 0
 ), hinted_paragraphs as (
     select 
         p.file_checksum,

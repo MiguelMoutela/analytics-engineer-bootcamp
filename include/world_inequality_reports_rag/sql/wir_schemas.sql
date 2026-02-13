@@ -8,7 +8,7 @@ CREATE OR REPLACE TABLE miguelmoutela.world_inequality_text_chunks (
     text_content VARCHAR,
     embedding VECTOR(FLOAT, 768),     -- text embedding model size
     metadata VARIANT,
-    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+    processed_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
 
 
@@ -18,9 +18,9 @@ CREATE OR REPLACE TABLE miguelmoutela.world_inequality_images (
     file_id VARCHAR,
     image_base64 VARCHAR,
     image_url VARCHAR,
-    embedding VECTOR(FLOAT, 1024),   -- image embedding model size
+    embedding VECTOR(FLOAT, 1024),  
     metadata VARIANT,
-    created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+    processed_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
 
 
@@ -33,7 +33,8 @@ INSERT INTO dataexpert_student.miguelmoutela.world_inequality_text_chunks (
     chunk_type,
     text_content,
     embedding,
-    metadata
+    metadata,
+    processed_at
 )
 SELECT
     UUID_STRING() AS chunk_id,
@@ -43,7 +44,6 @@ SELECT
     t.paragraph_number,
     'PARAGRAPH' AS chunk_type,
     t.paragraph AS text_content,
-    -- 🔥 Generate embedding here
     AI_EMBED(
         'snowflake-arctic-embed-m',
         t.paragraph
@@ -52,8 +52,8 @@ SELECT
     OBJECT_CONSTRUCT_KEEP_NULL(
         'value_hint', value_hint,
         'paragraph_length', LENGTH(t.paragraph)
-    ) AS metadata
-
+    ) AS metadata,
+    CURRENT_TIMESTAMP() as processed_at
 FROM (
 -- text extract
 with page_paragraphs as (
@@ -74,7 +74,6 @@ with page_paragraphs as (
             partition by file_checksum, filename, page_number, paragraph_number order by paragraph_number
         ) as images_in_paragraph
     from page_paragraphs
-    --where position(image_id IN paragraph) > 0
 ), hinted_paragraphs as (
     select 
         p.file_checksum,

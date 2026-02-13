@@ -12,7 +12,7 @@ import datetime
 
 def calculate_file_checksum(file_path: str) -> str:
     """
-    Calculate SHA256 checksum of a file.
+    Calculate md5 checksum of a file. md5 matches Snowflake Stage checksum.
     
     Args:
         file_path: Path to the file
@@ -20,12 +20,21 @@ def calculate_file_checksum(file_path: str) -> str:
     Returns:
         Hexadecimal checksum string
     """
-    sha256_hash = hashlib.sha256()
+    md5_hash = hashlib.md5()
     with open(file_path, "rb") as f:
         # Read file in chunks to handle large files efficiently
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
+
+
+
+def calculate_file_checksum(file_path: str) -> str:
+     # Switch from sha256 to md5
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            md5_hash.update(byte_block)
+    return md5_hash.hexdigest()
 
 
 def fetch_wir_reports() -> List[Dict]:
@@ -126,7 +135,10 @@ def load_earnings_transcripts_to_snowflake():
         file_path VARCHAR,
         file_checksum VARCHAR,
         document_url VARCHAR,
-        loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+        loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+        raw_processed_at TIMESTAMP,
+        images_extracted_at TIMESTAMP,
+        images_embedded_at TIMESTAMP
     )
     """
         
