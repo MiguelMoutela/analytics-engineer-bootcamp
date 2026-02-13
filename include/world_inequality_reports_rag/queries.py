@@ -5,31 +5,78 @@ def list_stage(stage_name: str):
         list @{os.environ["SF_SCHEMA"]}.{stage_name};
     """
 
-def update_metadata_as_at(as_at_column: str):
+def update_metadata_as_at(as_at_column: str, as_at):
     return fr"""--sql
-        UPDATE {os.environ["SF_SCHEMA"]}.world_inequality_reports_metadata
-        SET {as_at_column} = (
-            SELECT MAX(processed_at) 
-            FROM {os.environ["SF_SCHEMA"]}.world_inequality_reports_layout_raw
-        );
+        update {os.environ["SF_SCHEMA"]}.world_inequality_reports_metadata
+        set {as_at_column} = {as_at};
     """
 
-def create_stage(stage_name: str): 
+def last_updated_ts(table_name: str):
     return f"""--sql
-    CREATE STAGE IF NOT EXISTS {os.environ["SF_SCHEMA"]}.{stage_name}
-    DIRECTORY = (ENABLE = TRUE)
-    ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE');
-"""
+        select max(processed_at) 
+        from {os.environ["SF_SCHEMA"]}.{table_name};
+    """
+
+def create_stage(stage_name: str, comment: str): 
+    return f"""--sql
+        CREATE STAGE IF NOT EXISTS {os.environ["SF_SCHEMA"]}.{stage_name}
+        DIRECTORY = (ENABLE = TRUE)
+        ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
+        COMMENT = '{comment}';
+    """
 
 CREATE_METADATA_TABLE = f"""--sql
-    CREATE TABLE IF NOT EXISTS {os.environ["SF_SCHEMA"]}.WORLD_INEQUALITY_REPORTS_LAYOUT_RAW (
-        FILE_CHECKSUM VARCHAR(16777216),
-        FILENAME VARCHAR(16777216),
-        PAGE_NUMBER NUMBER(38,0),
-        PAGE_TEXT VARCHAR(16777216),
-        IMAGE_ID VARCHAR(16777216),
-        IMAGE_BASE64 VARCHAR(16777216),
-        PROCESSED_AT TIMESTAMP
+    create table if not exists {os.environ["SF_SCHEMA"]}.world_inequality_reports_metadata (
+        title varchar,
+        authors varchar,
+        file_name varchar,
+        file_path varchar,
+        file_checksum varchar,
+        document_url varchar,
+        loaded_at timestamp,
+        raw_processed_at timestamp,
+        text_processed_at timestamp,
+        images_extracted_at timestamp,
+        images_processed_at timestamp
+    );
+"""
+
+CREATE_RAW_EXTRACT_TABLE = f"""--sql
+    create table if not exists {os.environ["SF_SCHEMA"]}.world_inequality_reports_layout_raw (
+        FILE_CHECKSUM varchar,
+        FILENAME varchar,
+        PAGE_NUMBER number(38,0),
+        PAGE_TEXT varchar,
+        IMAGE_ID varchar,
+        IMAGE_BASE64 varchar,
+        PROCESSED_AT varchar
+    );
+"""
+
+CREATE_CHUNKS_TABLE = f"""--sql
+    create table if not exists{os.environ["SF_SCHEMA"]}.world_inequality_reports_text_chunks (
+        file_id varchar,
+        filename varchar,
+        page_number number,
+        paragraph_number number,
+        chunk_type varchar,               
+        text_content varchar,
+        embedding variant(float, 768),     -- text embedding model size
+        metadata variant,
+        processed_at timestamp
+    );
+"""
+
+CREATE_IMAGES_TABLE = f"""--sql
+    create table if not exists {os.environ["SF_SCHEMA"]}.world_inequality_reports_images (
+        image_id varchar,
+        image_number varchar,
+        file_id varchar,
+        image_base64 varchar,
+        image_url varchar,
+        embedding vector(float, 1024),  
+        metadata VARIANT,
+        processed_at timestamp
     );
 """
 
@@ -202,24 +249,24 @@ when not matched then
 """
 
 def merge_images_transform(staged_files):
-    a = fr"""--sql
+    return fr"""--sql
     merge into {os.environ["SF_SCHEMA"]}.world_inequality_images as target
     using (
         with wir_images as (
             select * 
-            from values({staged_files}) as t(image_url, image_filename, file_id, image_number)
+            from values {staged_files} as t(image_url, image_filename, file_id, image_number)
         ),
         image_embeddings AS (
             select *,
                 AI_EMBED(
                     'voyage-multimodal-3',
-                    to_file('@{os.environ["SCHEMA"]}.world_inequality_report_images_stage', image_filename)
+                    to_file('@world_inequality_report_images_stage', image_filename)
                 ) as embedding
             from wir_images
         )
         select 
             img.image_url,
-            img.filename,
+            img.image_filename,
             img.image_number as src_image_number,
             img.file_id as src_file_id,
             raw.image_base64,
@@ -233,7 +280,7 @@ def merge_images_transform(staged_files):
         from image_embeddings img
         join {os.environ["SF_SCHEMA"]}.world_inequality_reports_layout_raw raw on (
             raw.file_checksum = img.file_id
-            and raw.image_id = img.image_id
+            and raw.image_id = img.image_number
         )
     ) as source
     on target.file_id = source.src_file_id 
@@ -241,17 +288,13 @@ def merge_images_transform(staged_files):
     
     when matched then 
         update set 
-            image_base64 = source.image_base64,
-            image_url = source.image_url,
-            metadata = source.metadata,
             processed_at = current_timestamp()
             
     when not matched then 
         insert (image_id, image_number, file_id, image_base64, image_url, embedding, metadata, processed_at)
-        values (source.src_image_number, source.src_image_number, source.src_file_id, source.image_base64, source.image_url, source.embedding, source.metadata, current_timestamp())
+        values (source.image_filename, source.src_image_number, source.src_file_id, source.image_base64, source.image_url, source.embedding, source.metadata, current_timestamp())
     ;
     """
-    return a
     
 PROC_STAGE_BASE64_TO_JPEG_WIR_IMAGES = fr"""--sql
 CREATE PROCEDURE IF NOT EXISTS {os.environ["SF_SCHEMA"]}.PROC_STAGE_BASE64_TO_JPEG_WIR_IMAGES()

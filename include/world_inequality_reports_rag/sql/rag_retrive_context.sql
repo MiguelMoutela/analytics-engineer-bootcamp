@@ -11,7 +11,6 @@ with query_embedding as (
 )
 , ranked_chunks as (
     select
-        t.chunk_id,
         t.file_id,
         t.text_content,
         t.metadata,
@@ -21,7 +20,6 @@ with query_embedding as (
 )
 , chunks as (
     select 
-        chk.chunk_id,
         chk.file_id,
         chk.text_content,
         img.value as image_number,
@@ -33,7 +31,6 @@ with query_embedding as (
 )
 , chunks_with_images as (
     select 
-        chk.chunk_id,
         chk.file_id,
         chk.text_content,
         chk.text_metadata,
@@ -51,3 +48,68 @@ with query_embedding as (
 select *
 from chunks_with_images
 order by score desc;
+
+
+--idea gemini --looks good
+
+
+
+WITH query_embedding AS (
+    SELECT SNOWFLAKE.CORTEX.AI_EMBED_768(
+        'snowflake-arctic-embed-m',
+        'What are the main drivers of carbon inequality in middle income countries?'
+    ) AS q_vec_768
+),
+ranked_chunks AS (
+    SELECT
+        t.file_id,
+        t.text_content,
+        t.metadata,
+        VECTOR_COSINE_SIMILARITY(t.embedding, q.q_vec_768) AS score
+    FROM miguelmoutela.world_inequality_text_chunks t,
+         query_embedding q
+)
+, chunks as (
+    select *
+    from ranked_chunks
+    where score > 0.75
+)
+,chunks_with_images AS (
+    SELECT 
+        chk.text_content,
+        -- Generate the TO_FILE object for every image linked to the text
+        TO_FILE('@miguelmoutela.world_inequality_report_images_stage', img.image_id) AS img_file
+    FROM chunks chk
+    LEFT JOIN miguelmoutela.world_inequality_images img ON (
+        chk.file_id = img.file_id AND 
+        ARRAY_CONTAINS(img.image_number::VARIANT, chk.metadata:value_hint.images)
+    )
+),
+final_context AS (
+    SELECT 
+        -- Combine all unique text chunks
+        LISTAGG(DISTINCT text_content, '\n\n') AS full_text,
+        -- Aggregate all image file objects into one array
+        ARRAY_AGG(DISTINCT img_file) WITHIN GROUP (ORDER BY img_file) AS file_array
+    FROM chunks_with_images
+)
+SELECT SNOWFLAKE.CORTEX.COMPLETE(
+    'voyage-multimodal-3', -- Or 'claude-3-5-sonnet' if available
+    OBJECT_CONSTRUCT(
+        'messages', ARRAY_CONSTRUCT(
+            OBJECT_CONSTRUCT(
+                'role','system',
+                'content','You are a report analyst. Answer the user question using the provided text and images.'
+            ),
+            OBJECT_CONSTRUCT(
+                'role','user',
+                'content', CONCAT(
+                    'Context Information:\n', 
+                    (SELECT full_text FROM final_context),
+                    '\n\nQuestion: What does the chart reveal about middle-income countries?'
+                )
+            )
+        ),
+        'files', (SELECT file_array FROM final_context)
+    )
+) AS ai_response;

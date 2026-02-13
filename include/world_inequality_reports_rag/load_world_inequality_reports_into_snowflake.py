@@ -6,9 +6,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 from typing import List, Dict
 from bs4 import BeautifulSoup
-import dataexpert_snowflake as snowflake
+import include.dataexpert_snowflake as snowflake
 import datetime
-
+import queries
 
 def calculate_file_checksum(file_path: str) -> str:
     """
@@ -21,19 +21,11 @@ def calculate_file_checksum(file_path: str) -> str:
         Hexadecimal checksum string
     """
     md5_hash = hashlib.md5()
-    with open(file_path, "rb") as f:
-        # Read file in chunks to handle large files efficiently
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
-
-
-
-def calculate_file_checksum(file_path: str) -> str:
-     # Switch from sha256 to md5
+    
     with open(file_path, "rb") as f:
         for byte_block in iter(lambda: f.read(4096), b""):
             md5_hash.update(byte_block)
+    
     return md5_hash.hexdigest()
 
 
@@ -108,42 +100,21 @@ def load_earnings_transcripts_to_snowflake():
     Load World Inequality Reports into a Snowflake stage using Snowpark.
     """
     # Get schema from environment if not provided
-    schema = os.getenv("STUDENT_SCHEMA") or os.getenv("SCHEMA")
+    schema = os.environ["SF_SCHEMA"]
     
     # Get Snowpark session
     session = snowflake.get_snowpark_session(schema=schema)
     print(f"Connected to Snowflake with schema: {schema}")
     
-    # Create stage for earnings call transcripts
-    stage_name = f"{schema}.world_inequality_reports_stage"
-    create_stage_sql = f"""
-    CREATE STAGE IF NOT EXISTS {stage_name}
-    ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
-    COMMENT = 'Stage for World Inequality Reports'
-    """
-    
-    print(f"Creating stage: {stage_name}")
-    session.sql(create_stage_sql).collect()
+    # Create stage for earnings call transcripts 
+    create_doc_stage = session.sql(
+        queries.create_stage("world_inequality_reports_stage", "Stage for World Inequality Reports")
+    ).collect()
+    print(f"Created stage: {create_doc_stage}")
     
     # Create table to track transcripts metadata
-    table_name = f"{schema}.world_inequality_reports_metadata"
-    create_table_sql = f"""
-    CREATE TABLE IF NOT EXISTS {table_name} (
-        title VARCHAR,
-        authors VARCHAR,
-        file_name VARCHAR,
-        file_path VARCHAR,
-        file_checksum VARCHAR,
-        document_url VARCHAR,
-        loaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
-        raw_processed_at TIMESTAMP,
-        images_extracted_at TIMESTAMP,
-        images_embedded_at TIMESTAMP
-    )
-    """
-        
-    print(f"Creating metadata table: {table_name}")
-    session.sql(create_table_sql).collect()
+    create_metadata_table = session.sql(queries.CREATE_METADATA_TABLE).collect()
+    print(f"Created metadata table: {create_metadata_table}")
     
     # Create temporary directory for downloads
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -177,7 +148,7 @@ def load_earnings_transcripts_to_snowflake():
             # Check if file with same checksum already exists
             check_sql = f"""
             SELECT COUNT(*) as cnt
-            FROM {table_name}
+            FROM {schema}.world_inequality_reports_metadata
             WHERE title = '{title}'
             AND authors = '{authors}'
             AND file_checksum = '{file_checksum}'
@@ -190,7 +161,7 @@ def load_earnings_transcripts_to_snowflake():
                 
             # Upload file to Snowflake stage using PUT command
             print(f"Uploading to Snowflake stage...")
-            put_sql = f'PUT file://{file_path} @{stage_name} AUTO_COMPRESS=FALSE'
+            put_sql = f'PUT file://{file_path} @world_inequality_reports_stage AUTO_COMPRESS=FALSE'
             session.sql(put_sql).collect()
                 
             # Record metadata
@@ -198,10 +169,14 @@ def load_earnings_transcripts_to_snowflake():
                 'title': title,
                 'authors': authors,
                 'file_name': file_name,
-                'file_path': f'@{stage_name}/{file_name}',
+                'file_path': f'@world_inequality_reports_stage/{file_name}',
                 'file_checksum': file_checksum,
                 'document_url': document_url,
-                'loaded_at': datetime.datetime.now()
+                'loaded_at': datetime.datetime.now(),
+                'raw_processed_at': None,
+                'text_processed_at': None,
+                'images_extracted_at': None,
+                'images_processed_at': None
             })
             
             print(f"✓ Successfully uploaded {file_name} (checksum: {file_checksum[:8]}...)")
@@ -211,18 +186,18 @@ def load_earnings_transcripts_to_snowflake():
         print(f"\n{'='*60}")
         print(f"Inserting {len(all_reports)} report-records into metadata table...")
         df = session.create_dataframe(all_reports)
-        df.write.mode("append").save_as_table(table_name)
+        df.write.mode("append").save_as_table("world_inequality_reports_metadata")
         print(f"✓ Metadata inserted successfully")
     
     print(f"\n{'='*60}")
     print(f"SUMMARY")
     print(f"{'='*60}")
-    print(f"✓ Successfully loaded {len(all_reports)} reports to stage: {stage_name}")
-    print(f"✓ Metadata stored in table: {table_name}")
+    print(f"✓ Successfully loaded {len(all_reports)} reports to stage: world_inequality_reports_stage")
+    print(f"✓ Metadata stored in table: world_inequality_reports_metadata")
     
     # List files in stage
     print(f"\nFiles in stage:")
-    list_sql = f"LIST @{stage_name}"
+    list_sql = f"LIST @world_inequality_reports_stage"
     files = session.sql(list_sql).collect()
     for file in files[:20]:  # Show first 20
         print(f"  - {file[0]}")
@@ -231,8 +206,8 @@ def load_earnings_transcripts_to_snowflake():
         print(f"  ... and {len(files) - 20} more files")
     
     return {
-        'stage': stage_name,
-        'table': table_name,
+        'stage': 'world_inequality_reports_stage',
+        'table': 'world_inequality_reports_metadata',
         'reports_loaded': len(all_reports),
         'reports': all_reports
     }
