@@ -58,9 +58,8 @@ list_values = [
         os.path.basename(str(row['name'])).split('_')[1] 
     ) 
     for row in new_images
-    ]
+]
 
-list_values = [('None', 'None', 'None', 'None', 'None')] if not list_values else list_values
 # build string representations of `rows` image1 .. imageN to be used as SQL `SELECT * FROM rows`
 # image1 eg ('snowflake-stage-url-image1.jpeg', 'snowflake-stage-name', 'file-id-image1.jpeg, 'file_id', 'image1.jpeg')
 list_values_str = ", ".join([f"('{r[0]}','{r[1]}', '{r[2]}', '{r[3]}', '{r[4]}')" for r in list_values])

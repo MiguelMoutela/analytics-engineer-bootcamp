@@ -258,7 +258,7 @@ when not matched then
             'value_hint', source.value_hint_filled,
             'paragraph_length', length(source.text_content)
         ),
-        current_timestamp()
+        current_timestamp()::TIMESTAMP_NTZ
     );
 """
 
