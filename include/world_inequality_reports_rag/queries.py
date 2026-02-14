@@ -4,12 +4,27 @@ def list_stage(stage_name: str):
     return fr"""--sql
         list @{os.environ["SF_SCHEMA"]}.{stage_name};
     """
-
-def update_metadata_as_at(as_at_column: str, as_at):
+    
+def update_metadata_as_at(as_at_column: str, extraction_table: str):
     return fr"""--sql
         update {os.environ["SF_SCHEMA"]}.world_inequality_reports_metadata
-        set {as_at_column} = {as_at};
+        set {as_at_column} = (
+            select max(processed_at) 
+            from {os.environ["SF_SCHEMA"]}.{extraction_table}
+        );
     """
+
+def update_metadata_on_raw_extract_complete():
+    return update_metadata_as_at("raw_processed_at", "world_inequality_reports_layout_raw")
+
+def update_metadata_on_text_proc_complete():
+    return update_metadata_as_at("raw_processed_at", "world_inequality_reports_layout_raw")
+
+def update_metadata_on_image_extract_complete():
+    return update_metadata_as_at("raw_processed_at", "world_inequality_reports_layout_raw")
+
+def update_metadata_on_image_proc_complete():
+    return update_metadata_as_at("raw_processed_at", "world_inequality_reports_layout_raw")
 
 def last_updated_ts(table_name: str):
     return f"""--sql
@@ -43,25 +58,25 @@ CREATE_METADATA_TABLE = f"""--sql
 
 CREATE_RAW_EXTRACT_TABLE = f"""--sql
     create table if not exists {os.environ["SF_SCHEMA"]}.world_inequality_reports_layout_raw (
-        FILE_CHECKSUM varchar,
-        FILENAME varchar,
-        PAGE_NUMBER number(38,0),
-        PAGE_TEXT varchar,
-        IMAGE_ID varchar,
-        IMAGE_BASE64 varchar,
-        PROCESSED_AT varchar
+        file_checksum varchar,
+        filename varchar,
+        page_number number(38,0),
+        page_text varchar,
+        image_id varchar,
+        image_base64 varchar,
+        processed_at varchar
     );
 """
 
 CREATE_CHUNKS_TABLE = f"""--sql
-    create table if not exists{os.environ["SF_SCHEMA"]}.world_inequality_reports_text_chunks (
+    create table if not exists {os.environ["SF_SCHEMA"]}.world_inequality_reports_text_chunks (
         file_id varchar,
         filename varchar,
         page_number number,
         paragraph_number number,
         chunk_type varchar,               
         text_content varchar,
-        embedding variant(float, 768),     -- text embedding model size
+        embedding vector(float, 768),     
         metadata variant,
         processed_at timestamp
     );
@@ -75,7 +90,7 @@ CREATE_IMAGES_TABLE = f"""--sql
         image_base64 varchar,
         image_url varchar,
         embedding vector(float, 1024),  
-        metadata VARIANT,
+        metadata variant,
         processed_at timestamp
     );
 """
@@ -107,7 +122,6 @@ MERGE_RAW_TRANSFORM = fr"""--sql
             page.value:content::VARCHAR AS page_text,
             img.value:id::VARCHAR AS image_id,
             img.value:image_base64::VARCHAR AS image_base64,
-            CURRENT_TIMESTAMP() AS processed_at
         FROM parsed_doc,
             LATERAL FLATTEN(INPUT => parsed_content:pages) page,
             LATERAL FLATTEN(INPUT => page.value:images, OUTER => TRUE) img
@@ -118,19 +132,19 @@ MERGE_RAW_TRANSFORM = fr"""--sql
     AND (target.image_id = source.image_id OR (target.image_id IS NULL AND source.image_id IS NULL))
 
     WHEN MATCHED THEN 
-        UPDATE SET processed_at = source.processed_at
+        UPDATE SET processed_at = CURRENT_TIMESTAMP()
 
     WHEN NOT MATCHED THEN
         INSERT (
             file_checksum, filename, page_number, page_text, image_id, image_base64, processed_at
         )
         VALUES (
-            source.file_checksum, source.filename, source.page_number, source.page_text, source.image_id, source.image_base64, source.processed_at
+            source.file_checksum, source.filename, source.page_number, source.page_text, source.image_id, source.image_base64, CURRENT_TIMESTAMP()
         );
 """
 
 MERGE_CHUNKS_TRANSFORM = fr"""--sql
-merge into {os.environ["SF_SCHEMA"]}.world_inequality_text_chunks as target
+merge into {os.environ["SF_SCHEMA"]}.world_inequality_reports_text_chunks as target
 using (
     with page_paragraphs as (
         select
@@ -250,17 +264,17 @@ when not matched then
 
 def merge_images_transform(staged_files):
     return fr"""--sql
-    merge into {os.environ["SF_SCHEMA"]}.world_inequality_images as target
+    merge into {os.environ["SF_SCHEMA"]}.world_inequality_reports_images as target
     using (
         with wir_images as (
             select * 
-            from values {staged_files} as t(image_url, image_filename, file_id, image_number)
+            from values {staged_files} as t(image_url, stage_name, image_filename, file_id, image_number)
         ),
-        image_embeddings AS (
+        image_embeddings as (
             select *,
                 AI_EMBED(
                     'voyage-multimodal-3',
-                    to_file('@world_inequality_report_images_stage', image_filename)
+                    to_file(stage_name, image_filename)
                 ) as embedding
             from wir_images
         )
@@ -310,7 +324,7 @@ import hashlib
 import os
 
 def run(session):
-    stage_path = "@world_inequality_report_images_stage" # Ensure this stage exists
+    stage_path = "@world_inequality_reports_images_stage" # Ensure this stage exists
     
     # 1. Fetch data from your table and existing images in stage
     # The md5 column in LIST results is the hex hash
@@ -358,4 +372,143 @@ def run(session):
 
     return f"Successfully exported {{images_staged}} images to {{stage_path}}. Total images processed {{images_processed}}"
 $$;
+"""
+
+RAG_RETRIEVE_CONTEXT = f"""--sql
+    WITH query_embedding AS (
+        SELECT AI_EMBED(
+            'snowflake-arctic-embed-m',
+            'What are the main drivers of carbon inequality in middle income countries?'
+        ) AS q_vec_768
+    ),
+    ranked_chunks AS (
+        SELECT
+            t.file_id,
+            t.text_content,
+            t.metadata,
+            VECTOR_COSINE_SIMILARITY(t.embedding, q.q_vec_768) AS score
+        FROM miguelmoutela.world_inequality_reports_text_chunks t,
+             query_embedding q
+        WHERE score > 0.80 
+    ),
+    chunks_with_images AS (
+        SELECT 
+            chk.text_content,
+            TO_FILE(
+                '@miguelmoutela.world_inequality_reports_images_stage',
+                img.image_id
+            ) AS img_file
+        FROM ranked_chunks chk
+        LEFT JOIN miguelmoutela.world_inequality_reports_images img
+            ON chk.file_id = img.file_id
+            AND ARRAY_CONTAINS(
+                img.image_number::VARIANT,
+                chk.metadata:value_hint.images
+            )
+    )
+    SELECT 
+        LISTAGG(DISTINCT text_content, '\n\n') AS full_text,
+        ARRAY_AGG(DISTINCT img_file) AS file_array
+    FROM chunks_with_images;
+"""
+
+def ai_complete_again(full_text, file_array_json):
+    return f"""--sql
+        SELECT AI_COMPLETE(
+            'claude-3-5-sonnet',
+            PROMPT(
+                    'Context: {{0}}\\n\\nQuestion: What are the main drivers of carbon inequality in middle income countries? Refer to these images: {{1}}',
+                    $${full_text}$$,
+                    PARSE_JSON($${file_array_json}$$)
+            )
+        );
+    """
+
+
+def ai_complete(full_text, file_array_json):
+    # This builds the final Sonnet Contract
+    return f"""
+    SELECT SNOWFLAKE.CORTEX.AI_COMPLETE(
+        'claude-3-5-sonnet',
+        OBJECT_CONSTRUCT(
+            'messages', ARRAY_CONSTRUCT(
+                OBJECT_CONSTRUCT(
+                    'role', 'system',
+                    'content', 'You are a report analyst. Use the provided context to answer.'
+                ),
+                OBJECT_CONSTRUCT(
+                    'role', 'user',
+                    'content', 'Context:\\n{full_text}\\n\\nQuestion: What are the main drivers of carbon inequality?'
+                )
+            ),
+            'files', (
+                SELECT ARRAY_AGG(OBJECT_CONSTRUCT('path', f.value, 'type', 'image/jpeg'))
+                FROM TABLE(FLATTEN(input => PARSE_JSON('{file_array_json}'))) f
+            )
+        )
+    ) AS ai_response
+"""
+
+
+
+AI_COMPLETE = f"""--sql
+    WITH query_embedding AS (
+        SELECT AI_EMBED(
+            'snowflake-arctic-embed-m',
+            'What are the main drivers of carbon inequality in middle income countries?'
+        ) AS q_vec_768
+    ),
+    ranked_chunks AS (
+        SELECT
+            t.file_id,
+            t.text_content,
+            t.metadata,
+            VECTOR_COSINE_SIMILARITY(t.embedding, q.q_vec_768) AS score
+        FROM miguelmoutela.world_inequality_text_chunks t,
+            query_embedding q
+    )
+    , chunks as (
+        select *
+        from ranked_chunks
+        where score > 0.75
+    )
+    ,chunks_with_images AS (
+        SELECT 
+            chk.text_content,
+            -- Generate the TO_FILE object for every image linked to the text
+            TO_FILE('@miguelmoutela.world_inequality_report_images_stage', img.image_id) AS img_file
+        FROM chunks chk
+        LEFT JOIN miguelmoutela.world_inequality_images img ON (
+            chk.file_id = img.file_id AND 
+            ARRAY_CONTAINS(img.image_number::VARIANT, chk.metadata:value_hint.images)
+        )
+    ),
+    final_context AS (
+        SELECT 
+            -- Combine all unique text chunks
+            LISTAGG(DISTINCT text_content, '\n\n') AS full_text,
+            -- Aggregate all image file objects into one array
+            ARRAY_AGG(DISTINCT img_file) WITHIN GROUP (ORDER BY img_file) AS file_array
+        FROM chunks_with_images
+    )
+    SELECT SNOWFLAKE.CORTEX.COMPLETE(
+        'voyage-multimodal-3', 
+        OBJECT_CONSTRUCT(
+            'messages', ARRAY_CONSTRUCT(
+                OBJECT_CONSTRUCT(
+                    'role','system',
+                    'content','You are a report analyst. Answer the user question using the provided text and images.'
+                ),
+                OBJECT_CONSTRUCT(
+                    'role','user',
+                    'content', CONCAT(
+                        'Context Information:\n', 
+                        (SELECT full_text FROM final_context),
+                        '\n\nQuestion: What does the chart reveal about middle-income countries?'
+                    )
+                )
+            ),
+            'files', (SELECT file_array FROM final_context)
+        )
+    ) AS ai_response;
 """
