@@ -8,23 +8,23 @@ def list_stage(stage_name: str):
 def _update_metadata_as_at(as_at_column: str, extraction_table: str):
     return fr"""--sql
         update {os.environ["SF_SCHEMA"]}.world_inequality_reports_metadata
-        set as_at_column = (
+        set {as_at_column} = (
             select max(processed_at) 
-            from {os.environ["SF_SCHEMA"]}.extraction_table
+            from {os.environ["SF_SCHEMA"]}.{extraction_table}
         );
     """
 
 def update_metadata_on_raw_extract_complete():
-    return _update_metadata_as_at("raw_processed_at", "world_inequality_reports_layout_raw")
+    return _update_metadata_as_at("raw_processed_at", "world_inequality_reports_metadata")
 
 def update_metadata_on_text_proc_complete():
-    return _update_metadata_as_at("text_processed_at", "world_inequality_reports_layout_raw")
+    return _update_metadata_as_at("text_processed_at", "world_inequality_reports_metadata")
 
 def update_metadata_on_image_extract_complete():
-    return _update_metadata_as_at("images_extracted_at", "world_inequality_reports_layout_raw")
+    return _update_metadata_as_at("images_extracted_at", "world_inequality_reports_metadata")
 
 def update_metadata_on_image_proc_complete():
-    return _update_metadata_as_at("images_processed_at", "world_inequality_reports_layout_raw")
+    return _update_metadata_as_at("images_processed_at", "world_inequality_reports_metadata")
 
 def last_updated_ts(table_name: str):
     return f"""--sql
@@ -132,7 +132,7 @@ MERGE_RAW_TRANSFORM = fr"""--sql
     AND (target.image_id = source.image_id OR (target.image_id IS NULL AND source.image_id IS NULL))
 
     WHEN MATCHED THEN 
-        UPDATE SET processed_at = CURRENT_TIMESTAMP()
+        UPDATE SET processed_at = CURRENT_TIMESTAMP()::TIMESTAMP_NTZ
 
     WHEN NOT MATCHED THEN
         INSERT (
@@ -227,7 +227,7 @@ using (
             ),
             object_construct() 
         ) AS value_hint_filled
-    from nullable_hints,
+    from nullable_hints
     where length(paragraph) > 50
     qualify row_number() over (
         partition by file_checksum, page_number, paragraph_number 
@@ -239,7 +239,7 @@ and target.page_number = source.page_number
 and target.paragraph_number = source.paragraph_number
 
 when matched then
-    update set processed_at = current_timestamp()
+    update set processed_at = current_timestamp()::TIMESTAMP_NTZ
 
 when not matched then
     insert (
@@ -302,7 +302,7 @@ def merge_images_transform(staged_files):
     
     when matched then 
         update set 
-            processed_at = current_timestamp()
+            processed_at = current_timestamp()::TIMESTAMP_NTZ
             
     when not matched then 
         insert (image_id, image_number, file_id, image_base64, image_url, embedding, metadata, processed_at)
@@ -425,4 +425,3 @@ def ai_complete(full_text, file_array_json):
             )
         );
     """
-    

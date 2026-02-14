@@ -106,13 +106,14 @@ def load_earnings_transcripts_to_snowflake():
     session = snowflake.get_snowpark_session(schema=schema)
     print(f"Connected to Snowflake with schema: {schema}")
     
-    # Create stage for earnings call transcripts 
+    # Create stage for reports
     create_doc_stage = session.sql(
-        queries.create_stage("world_inequality_reports_stage", "Stage for World Inequality Reports")
+        queries.create_stage("world_inequality_reports_stage"), 
+        params=["Stage for World Inequality Reports"]
     ).collect()
     print(f"Created stage: {create_doc_stage}")
     
-    # Create table to track transcripts metadata
+    # Create table to track reports metadata
     create_metadata_table = session.sql(queries.CREATE_METADATA_TABLE).collect()
     print(f"Created metadata table: {create_metadata_table}")
     
@@ -211,6 +212,5 @@ def load_earnings_transcripts_to_snowflake():
         'reports_loaded': len(all_reports),
         'reports': all_reports
     }
-
 
 load_earnings_transcripts_to_snowflake()
