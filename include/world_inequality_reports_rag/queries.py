@@ -121,7 +121,7 @@ MERGE_RAW_TRANSFORM = fr"""--sql
             page.value:index::INTEGER AS page_number,
             page.value:content::VARCHAR AS page_text,
             img.value:id::VARCHAR AS image_id,
-            img.value:image_base64::VARCHAR AS image_base64,
+            img.value:image_base64::VARCHAR AS image_base64
         FROM parsed_doc,
             LATERAL FLATTEN(INPUT => parsed_content:pages) page,
             LATERAL FLATTEN(INPUT => page.value:images, OUTER => TRUE) img
