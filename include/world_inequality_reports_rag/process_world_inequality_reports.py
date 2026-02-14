@@ -5,23 +5,23 @@ from include import dataexpert_snowflake as snowflake
 
 snow_cx = snowflake.get_snowpark_session(os.environ["SF_SCHEMA"])
 
-# created_extract_table = snow_cx.sql(queries.CREATE_RAW_EXTRACT_TABLE).collect()
-# print(f"\ncreated_extract_table: {json.dumps(created_extract_table[0].as_dict(), indent=2)} " if created_extract_table else None) 
+created_extract_table = snow_cx.sql(queries.CREATE_RAW_EXTRACT_TABLE).collect()
+print(f"\ncreated_extract_table: {json.dumps(created_extract_table[0].as_dict(), indent=2)} " if created_extract_table else None) 
 
-# raw_extract_docs = snow_cx.sql(queries.MERGE_RAW_TRANSFORM).collect()
-# print(f"\nraw_extract_docs: {json.dumps(raw_extract_docs[0].as_dict(), indent=2)} " if raw_extract_docs else None) 
+raw_extract_docs = snow_cx.sql(queries.MERGE_RAW_TRANSFORM).collect()
+print(f"\nraw_extract_docs: {json.dumps(raw_extract_docs[0].as_dict(), indent=2)} " if raw_extract_docs else None) 
 
-# update_raw_step_on_complete = snow_cx.sql(queries.update_metadata_on_raw_extract_complete()).collect()
-# print(f"\nupdate_raw_step_on_complete: {json.dumps(update_raw_step_on_complete[0].as_dict(), indent=2)} " if update_raw_step_on_complete else None)
+update_raw_step_on_complete = snow_cx.sql(queries.update_metadata_on_raw_extract_complete()).collect()
+print(f"\nupdate_raw_step_on_complete: {json.dumps(update_raw_step_on_complete[0].as_dict(), indent=2)} " if update_raw_step_on_complete else None)
 
-# created_chunks_table = snow_cx.sql(queries.CREATE_CHUNKS_TABLE).collect()
-# print(f"\nreated_chunks_table: {json.dumps(created_chunks_table[0].as_dict(), indent=2)} " if created_chunks_table else None)
+created_chunks_table = snow_cx.sql(queries.CREATE_CHUNKS_TABLE).collect()
+print(f"\nreated_chunks_table: {json.dumps(created_chunks_table[0].as_dict(), indent=2)} " if created_chunks_table else None)
 
-# process_text_chunks = snow_cx.sql(queries.MERGE_CHUNKS_TRANSFORM).collect()
-# print(f"\nprocess_text_chunks: {json.dumps(process_text_chunks[0].as_dict(), indent=2)} " if process_text_chunks else None)
+process_text_chunks = snow_cx.sql(queries.MERGE_CHUNKS_TRANSFORM).collect()
+print(f"\nprocess_text_chunks: {json.dumps(process_text_chunks[0].as_dict(), indent=2)} " if process_text_chunks else None)
 
-# update_text_step_on_complete = snow_cx.sql(queries.update_metadata_on_text_proc_complete()).collect()
-# print(f"\nupdate_text_step_on_complete: {json.dumps(update_text_step_on_complete[0].as_dict(), indent=2)} " if update_text_step_on_complete else None)
+update_text_step_on_complete = snow_cx.sql(queries.update_metadata_on_text_proc_complete()).collect()
+print(f"\nupdate_text_step_on_complete: {json.dumps(update_text_step_on_complete[0].as_dict(), indent=2)} " if update_text_step_on_complete else None)
 
 create_images_stage = snow_cx.sql(
     queries.create_stage(
