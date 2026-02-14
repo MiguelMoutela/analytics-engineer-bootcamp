@@ -64,7 +64,7 @@ CREATE_RAW_EXTRACT_TABLE = f"""--sql
         page_text varchar,
         image_id varchar,
         image_base64 varchar,
-        processed_at varchar
+        processed_at timestamp_ntz
     );
 """
 
