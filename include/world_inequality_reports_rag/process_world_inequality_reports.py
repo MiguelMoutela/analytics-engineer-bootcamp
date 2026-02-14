@@ -24,9 +24,8 @@ update_text_step_on_complete = snow_cx.sql(queries.update_metadata_on_text_proc_
 print(f"\nupdate_text_step_on_complete: {json.dumps(update_text_step_on_complete[0].as_dict(), indent=2)} " if update_text_step_on_complete else None)
 
 create_images_stage = snow_cx.sql(
-    queries.create_stage(
-        "world_inequality_reports_images_stage", "Stage for Images of World Inequality Reports")
-    ).collect()
+    queries.create_stage("world_inequality_reports_images_stage"), params=["Stage for Images of World Inequality Reports"]
+).collect()
 print(f"\ncreate_images_stage: {json.dumps(create_images_stage[0].as_dict(), indent=2)} " if create_images_stage else None)
 
 create_proc_decode_and_stage_images = snow_cx.sql(queries.PROC_STAGE_BASE64_TO_JPEG_WIR_IMAGES).collect()
